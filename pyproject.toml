@@ -1,0 +1,27 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "sdd-dual-loop"
+version = "0.1.0"
+description = "A minimal runnable dual-loop software development workflow"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "fastapi>=0.115,<1",
+    "pyyaml>=6,<7",
+]
+
+[project.optional-dependencies]
+test = [
+    "httpx>=0.27,<1",
+    "pytest>=8,<9",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/sdd"]
+
+[tool.pytest.ini_options]
+pythonpath = ["src", "examples/fastapi-user-query"]
+testpaths = ["tests"]

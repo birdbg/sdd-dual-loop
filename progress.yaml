@@ -1,0 +1,57 @@
+framework: sdd-dual-loop
+architecture_version: "1.0"
+milestone: M1
+completion_standard: "docs/milestones/M1.md#M1-完成标准"
+
+status: in_progress
+current_task: implement_brainstorming_node
+current_order_item: 3
+
+implementation_order:
+  - directory_and_run_context
+  - purpose
+  - brainstorming
+  - spec_and_plan
+  - verify
+  - development
+  - testing
+  - refactor
+  - archive
+  - end_to_end_case
+
+checkpoints:
+  - task: directory_and_run_context
+    status: completed
+    verification: ".venv/bin/python -m pytest tests/test_models.py -q"
+    result: "1 passed in 0.01s"
+  - task: purpose
+    status: completed
+    verification: ".venv/bin/python -m pytest tests/test_purpose.py -q"
+    result: "2 passed in 0.88s"
+
+completed:
+  - architecture_document
+  - milestone_definition
+  - repository_structure
+  - run_context
+  - core_models
+  - fixed_prompts
+  - example_case
+  - purpose_model
+  - purpose_node
+  - purpose_tests
+
+pending:
+  - brainstorming_node
+  - planning_node
+  - verify_node
+  - development_node
+  - testing_node
+  - refactor_node
+  - archive_node
+  - end_to_end_test
+
+last_successful_command: ".venv/bin/python -m pytest tests/test_models.py -q"
+last_error: null
+retry_count: 0
+updated_at: "2026-07-21T18:38:43+08:00"
