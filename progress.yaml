@@ -3,9 +3,9 @@ architecture_version: "1.0"
 milestone: M3
 completion_standard: "docs/milestones/M3.md#第一阶段完成标准"
 
-status: in_progress
-current_task: define_m3_scope_and_models
-current_order_item: 1
+status: completed
+current_task: null
+current_order_item: null
 
 implementation_order:
   - repository_profile
@@ -60,16 +60,21 @@ completed:
   - m3_models_defined
   - m3_run_context_extended
   - m3_model_tests
-
-pending:
   - checkpoint_persistence
+  - state_store
   - safe_resume
   - manual_spec_change
   - routing_execution
   - versioned_artifacts
+  - multiple_spec_revisions
+  - m3_runner_integration
+  - m3_archive_extension
   - m3_end_to_end_case
+  - m3_acceptance
 
-last_successful_command: ".venv/bin/python -m pytest -q"
+pending: []
+
+last_successful_command: ".venv/bin/python -m pytest -q && .venv/bin/python -m compileall -q src tests && git diff --check"
 last_error: null
 retry_count: 0
-updated_at: "2026-07-22T17:00:00+08:00"
+updated_at: "2026-07-22T18:00:00+08:00"
