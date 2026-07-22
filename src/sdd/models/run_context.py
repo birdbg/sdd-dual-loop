@@ -57,5 +57,6 @@ class RunContext:
     verify_version: int = 1
     last_completed_node: str | None = None
     resume_allowed: bool = False
+    max_spec_revisions: int = 5
     spec_changes: list[SpecChange] = field(default_factory=list)
     routing_history: list[RoutingDecision] = field(default_factory=list)

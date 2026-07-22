@@ -34,12 +34,17 @@ class Task:
 @dataclass(slots=True)
 class Plan:
     tasks: list[Task] = field(default_factory=list)
+    spec_revision: int = 1
+    revision: int = 1
 
 
 @dataclass(slots=True)
 class VerifyResult:
     approved: bool
     feedback: list[str] = field(default_factory=list)
+    spec_revision: int = 1
+    plan_revision: int = 1
+    revision: int = 1
 
 
 @dataclass(slots=True)
@@ -122,14 +127,14 @@ class TestExecution:
 
 
 FeedbackCategory = Literal[
-    "code_error", "test_error", "plan_omission", "spec_ambiguous", "blocked"
+    "code_error", "test_error", "plan_omission", "spec_ambiguous", "purpose_conflict", "blocked"
 ]
 
 
 @dataclass(slots=True)
 class ExecutionFeedback:
     category: FeedbackCategory
-    target: Literal["development", "testing", "planning", "change_spec", "archive"]
+    target: Literal["development", "testing", "planning", "change_spec", "purpose", "archive"]
     evidence: str
     decision: str
 
