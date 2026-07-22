@@ -1,19 +1,24 @@
 framework: sdd-dual-loop
 architecture_version: "1.0"
-milestone: M3
-completion_standard: "docs/milestones/M3.md#第一阶段完成标准"
+milestone: M4
+completion_standard: "docs/milestones/M4.md#完成标准"
 
 status: completed
 current_task: null
 current_order_item: null
 
 implementation_order:
-  - repository_profile
-  - isolated_branch
-  - restricted_tools
-  - test_feedback_loop
-  - minimal_ci
-  - end_to_end_acceptance
+  - m4_scope
+  - task_record
+  - worktree_isolation
+  - task_registry
+  - task_lock
+  - scheduler
+  - m3_integration
+  - cleanup
+  - user_guide
+  - m4_end_to_end
+  - m4_acceptance
 
 checkpoints:
   - task: repository_profile
@@ -71,10 +76,22 @@ completed:
   - m3_archive_extension
   - m3_end_to_end_case
   - m3_acceptance
+  - m4_scope
+  - task_record
+  - worktree_isolation
+  - task_registry
+  - task_lock
+  - scheduler
+  - m3_integration
+  - cleanup
+  - user_guide
+  - quick_start
+  - m4_end_to_end
+  - m4_acceptance
 
 pending: []
 
 last_successful_command: ".venv/bin/python -m pytest -q && .venv/bin/python -m compileall -q src tests && git diff --check"
 last_error: null
 retry_count: 0
-updated_at: "2026-07-22T18:00:00+08:00"
+updated_at: "2026-07-22T20:00:00+08:00"

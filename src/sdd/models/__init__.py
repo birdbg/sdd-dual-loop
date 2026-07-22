@@ -19,6 +19,7 @@ from .artifacts import (
     Checkpoint,
     SpecChange,
     RoutingDecision,
+    TaskRecord,
 )
 from .run_context import RunContext
 
@@ -42,4 +43,5 @@ __all__ = [
     "Checkpoint",
     "SpecChange",
     "RoutingDecision",
+    "TaskRecord",
 ]
