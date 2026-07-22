@@ -9,7 +9,8 @@ from typing import Callable
 
 from sdd.checkpoint import load_checkpoint
 from sdd.m3 import M3Runner
-from sdd.models import RunContext, TaskRecord
+from sdd.models import RunContext, TaskRecord, WorkspaceRecord
+from sdd.repository import scan_repository
 from sdd.state_store import load_run_context
 from sdd.task_lock import acquire_task_lock, is_task_locked, release_task_lock
 from sdd.task_registry import TERMINAL_STATUSES, TaskRegistry
@@ -75,6 +76,30 @@ class LocalScheduler:
     def runner_for(self, task: TaskRecord) -> M3Runner:
         validate_task_worktree(task)
         return M3Runner(self.runs_root)
+
+    def prepare_run_context(
+        self, task_id: str, input: str, context: RunContext | None = None,
+    ) -> RunContext:
+        """Bind an M3 RunContext to the task Worktree without creating another branch."""
+        task = self.registry.get_task(task_id)
+        if task.status != "running":
+            raise SchedulerError("a RunContext can only be prepared for a running task")
+        validate_task_worktree(task)
+        if context is None:
+            context = RunContext(task.run_id, input, status="running")
+        if context.run_id != task.run_id:
+            raise SchedulerError("RunContext run_id does not match TaskRecord")
+        context.status = "running"
+        context.repository_profile = scan_repository(task.worktree_path, input)
+        context.workspace = WorkspaceRecord(
+            repository=str(Path(task.worktree_path).resolve()),
+            base_branch=task.branch,
+            base_commit=task.base_commit,
+            work_branch=task.branch,
+            initial_worktree_clean=True,
+        )
+        self.runner_for(task).persist(context)
+        return context
 
     def start_ready_tasks(self, starter: Starter | None = None) -> list[TaskRecord]:
         tasks = self.registry.list_tasks()
@@ -165,8 +190,12 @@ class LocalScheduler:
         context = load_run_context(task.run_id, self.runs_root)
         if checkpoint.run_id != task.run_id or context.run_id != task.run_id:
             raise SchedulerError("persisted run_id does not match TaskRecord")
-        if checkpoint.status != task.status or context.status != task.status:
-            raise SchedulerError("persisted status does not match TaskRecord")
+        if checkpoint.status != context.status:
+            raise SchedulerError("Checkpoint and RunContext status differ")
+        # A human Change Spec or audited unblock legitimately advances M3 back
+        # to running before the external scheduler requeues the task.
+        if context.status not in {task.status, "running"}:
+            raise SchedulerError("persisted status does not match TaskRecord lifecycle")
         self.runner_for(task).resume(task.run_id, task.worktree_path)
         task.status = "queued"
         task.pid = None
