@@ -17,6 +17,7 @@ class RepositoryTools:
         self.workspace = workspace
         self.root = Path(workspace.repository).resolve(strict=True)
         self.allowed_paths = set(allowed_paths or [])
+        self._write_boundary_enabled = allowed_paths is not None
         self.operations: list[ToolOperation] = []
         self.originals: dict[str, str] = {}
 
@@ -92,6 +93,6 @@ class RepositoryTools:
                 raise ToolBoundaryError("path escapes repository root")
             resolved = parent / candidate.name
         relative = resolved.relative_to(self.root).as_posix()
-        if write and self.allowed_paths and relative not in self.allowed_paths:
+        if write and self._write_boundary_enabled and relative not in self.allowed_paths:
             raise ToolBoundaryError(f"path is outside the verified plan: {relative}")
         return resolved

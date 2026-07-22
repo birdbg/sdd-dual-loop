@@ -27,6 +27,7 @@ class Spec:
 class Task:
     task_id: str
     description: str
+    allowed_paths: list[str] = field(default_factory=list)
     completed: bool = False
 
 

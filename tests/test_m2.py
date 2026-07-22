@@ -7,7 +7,7 @@ import pytest
 
 from sdd.execution_loop.feedback import classify_failure
 from sdd.models import WorkspaceRecord
-from sdd.models import BrainstormResult, Plan, Purpose, RunContext, Spec, VerifyResult
+from sdd.models import BrainstormResult, Plan, Purpose, RefactorResult, RunContext, Spec, Task, VerifyResult
 from sdd.m2 import M2Runner
 from sdd.repository import scan_repository
 from sdd.tools import RepositoryTools, ToolBoundaryError
@@ -92,7 +92,7 @@ def test_runner_reworks_twice_and_archives_failure(tmp_path: Path, monkeypatch: 
     context.purpose = Purpose("change items")
     context.brainstorm_result = BrainstormResult("choice")
     context.spec = Spec(["change items"], ["tests pass"])
-    context.plan = Plan()
+    context.plan = Plan([Task("change-routes", "change routes", ["src/shop/routes.py"])])
     context.verify_result = VerifyResult(True)
     calls = 0
 
@@ -110,7 +110,7 @@ def test_runner_reworks_twice_and_archives_failure(tmp_path: Path, monkeypatch: 
         calls += 1
         tools.write_file("src/shop/routes.py", f"# attempt {calls}\n", current.iteration)
 
-    M2Runner(tmp_path / "runs").run(context, root, ["src/shop/routes.py"], develop)
+    M2Runner(tmp_path / "runs").run(context, root, develop)
     assert context.status == "failed"
     assert context.iteration == 2
     assert calls == 3
@@ -132,15 +132,43 @@ def test_runner_uses_real_failure_then_completes(tmp_path: Path) -> None:
     context.purpose = Purpose("fix items")
     context.brainstorm_result = BrainstormResult("choice")
     context.spec = Spec(["fix items"], ["tests pass"])
-    context.plan = Plan()
+    context.plan = Plan([Task("fix-routes", "fix routes", ["src/shop/routes.py"])])
     context.verify_result = VerifyResult(True)
 
     def develop(current: RunContext, tools: RepositoryTools) -> None:
         content = "# still broken\n" if current.iteration == 0 else "# fixed\n"
         tools.write_file("src/shop/routes.py", content, current.iteration)
 
-    M2Runner(tmp_path / "runs").run(context, root, ["src/shop/routes.py"], develop)
+    refactor_calls = 0
+
+    def refactor(current: RunContext, tools: RepositoryTools) -> None:
+        nonlocal refactor_calls
+        refactor_calls += 1
+        current.refactor_result = RefactorResult(False, "nothing safe to improve")
+
+    M2Runner(tmp_path / "runs").run(context, root, develop, refactor=refactor)
     assert context.status == "completed"
     assert context.iteration == 1
-    assert [run.exit_code for run in context.test_executions] == [1, 0]
+    assert [run.exit_code for run in context.test_executions] == [1, 0, 0]
+    assert refactor_calls == 1
+    assert context.refactor_result == RefactorResult(False, "nothing safe to improve")
     assert (tmp_path / "runs" / "success-run" / "archive.md").exists()
+    assert "nothing safe to improve" in (tmp_path / "runs" / "success-run" / "refactor.md").read_text()
+
+
+def test_runner_rejects_writes_not_present_in_verified_plan(tmp_path: Path) -> None:
+    root = _repo(tmp_path / "target")
+    context = RunContext("empty-plan", "change items")
+    context.purpose = Purpose("change items")
+    context.brainstorm_result = BrainstormResult("choice")
+    context.spec = Spec(["change items"], ["tests pass"])
+    context.plan = Plan()
+    context.verify_result = VerifyResult(True)
+
+    def develop(current: RunContext, tools: RepositoryTools) -> None:
+        tools.write_file("src/shop/routes.py", "# unauthorized\n", current.iteration)
+
+    M2Runner(tmp_path / "runs").run(context, root, develop)
+
+    assert context.status == "blocked"
+    assert context.errors == ["path is outside the verified plan: src/shop/routes.py"]

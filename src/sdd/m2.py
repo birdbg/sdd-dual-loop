@@ -8,13 +8,14 @@ from pathlib import Path
 from sdd.execution_loop.feedback import classify_failure
 from sdd.execution_loop.testing import TestRunner
 from sdd.intention_loop.archive import archive_run
-from sdd.models import RunContext
+from sdd.models import RefactorResult, RunContext
 from sdd.repository import scan_repository
 from sdd.tools import RepositoryTools
 from sdd.workspace import WorkspaceError, baseline_diff, create_workspace
 
 Develop = Callable[[RunContext, RepositoryTools], None]
-Replan = Callable[[RunContext], list[str]]
+Refactor = Callable[[RunContext, RepositoryTools], None]
+Replan = Callable[[RunContext], None]
 
 
 class M2Runner:
@@ -31,10 +32,10 @@ class M2Runner:
         self,
         context: RunContext,
         repository: str | Path,
-        allowed_paths: list[str],
         develop: Develop,
         *,
         related_tests: list[str] | None = None,
+        refactor: Refactor | None = None,
         replan: Replan | None = None,
     ) -> RunContext:
         diff = ""
@@ -46,7 +47,7 @@ class M2Runner:
                 context.errors.extend(context.repository_profile.unresolved)
                 return context
             context.workspace = create_workspace(repository, context.run_id)
-            tools = RepositoryTools(context.workspace, allowed_paths)
+            tools = RepositoryTools(context.workspace, self._verified_plan_paths(context))
             context.status = "running"
             while True:
                 develop(context, tools)
@@ -55,8 +56,23 @@ class M2Runner:
                 context.test_result = result
                 context.test_executions.extend(executions)
                 if result.passed:
-                    context.status = "completed"
-                    break
+                    if refactor is None:
+                        context.refactor_result = RefactorResult(
+                            changed=False,
+                            summary="未发现有价值且不改变行为的重构项",
+                        )
+                    else:
+                        context.refactor_result = None
+                        refactor(context, tools)
+                        if context.refactor_result is None:
+                            raise ValueError("Refactor callback must set context.refactor_result")
+                    context.tool_operations = list(tools.operations)
+                    result, executions = TestRunner(repository, context.repository_profile).run(related_tests)
+                    context.test_result = result
+                    context.test_executions.extend(executions)
+                    if result.passed:
+                        context.status = "completed"
+                        break
                 output = executions[-1].output if executions else "; ".join(result.details)
                 feedback = classify_failure(output, exit_code=executions[-1].exit_code if executions else 1)
                 context.feedback.append(feedback)
@@ -75,12 +91,12 @@ class M2Runner:
                         context.status = "blocked"
                         context.errors.append("plan omission requires Plan and Verify callback")
                         break
-                    allowed_paths = replan(context)
-                    tools.allowed_paths = set(allowed_paths)
+                    replan(context)
                     if context.verify_result is None or not context.verify_result.approved:
                         context.status = "blocked"
                         context.errors.append("revised Plan was not verified")
                         break
+                    tools.allowed_paths = set(self._verified_plan_paths(context))
             diff = baseline_diff(context.workspace)
             return context
         except (ValueError, WorkspaceError, OSError) as error:
@@ -109,3 +125,9 @@ class M2Runner:
             missing.append("Verify approval")
         if missing:
             raise ValueError("cannot enter Dev before: " + ", ".join(missing))
+
+    @staticmethod
+    def _verified_plan_paths(context: RunContext) -> list[str]:
+        if context.plan is None:
+            return []
+        return sorted({path for task in context.plan.tasks for path in task.allowed_paths})
