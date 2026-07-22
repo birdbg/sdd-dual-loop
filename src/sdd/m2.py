@@ -12,6 +12,7 @@ from sdd.models import RefactorResult, RunContext
 from sdd.repository import scan_repository
 from sdd.tools import RepositoryTools
 from sdd.workspace import WorkspaceError, baseline_diff, create_workspace
+from sdd.routing import route_feedback
 
 Develop = Callable[[RunContext, RepositoryTools], None]
 Refactor = Callable[[RunContext, RepositoryTools], None]
@@ -75,12 +76,10 @@ class M2Runner:
                         break
                 output = executions[-1].output if executions else "; ".join(result.details)
                 feedback = classify_failure(output, exit_code=executions[-1].exit_code if executions else 1)
-                context.feedback.append(feedback)
+                route_feedback(context, feedback, context.current_node, self.runs_root)
                 if feedback.category == "blocked":
-                    context.status = "blocked"
                     break
                 if feedback.category == "spec_ambiguous":
-                    context.status = "awaiting_human"
                     break
                 if context.iteration >= context.max_iterations:
                     context.status = "failed"

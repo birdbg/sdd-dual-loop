@@ -11,6 +11,7 @@ NodeName: TypeAlias = Literal[
     "testing",
     "refactor",
     "archive",
+    "change_spec",
 ]
 
 RunStatus: TypeAlias = Literal[
