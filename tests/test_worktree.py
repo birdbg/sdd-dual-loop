@@ -61,3 +61,13 @@ def test_branch_mismatch_is_rejected(repository: Path, tmp_path: Path) -> None:
     git(Path(task.worktree_path), "switch", "--detach")
     with pytest.raises(WorktreeError, match="branch"):
         validate_task_worktree(task)
+
+
+def test_worktrees_root_inside_source_repository_is_rejected_without_pollution(
+    repository: Path,
+) -> None:
+    before = git(repository, "status", "--porcelain")
+    with pytest.raises(WorktreeError, match="outside existing Git worktrees"):
+        create_task_worktree(repository, "nested", repository / ".sdd-worktrees")
+    assert git(repository, "status", "--porcelain") == before == ""
+    assert not (repository / ".sdd-worktrees").exists()

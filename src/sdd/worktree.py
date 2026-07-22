@@ -63,7 +63,9 @@ def create_task_worktree(
     """Create ``sdd/<task-id>`` without changing the primary worktree."""
     _validate_task_id(task_id)
     root = _repository_root(repository)
-    destination = (Path(worktrees_root).expanduser().resolve() / task_id)
+    worktrees_root = Path(worktrees_root).expanduser().resolve()
+    _validate_worktrees_root(root, worktrees_root)
+    destination = worktrees_root / task_id
     branch = f"sdd/{task_id}"
     if destination.exists():
         raise WorktreeError(f"worktree path already exists: {destination}")
@@ -106,6 +108,20 @@ def create_task_worktree(
             text=True, capture_output=True, check=False,
         )
         raise
+
+
+def _validate_worktrees_root(repository: Path, worktrees_root: Path) -> None:
+    """Keep task Worktrees outside every Worktree known to this repository."""
+    output = _git(repository, "worktree", "list", "--porcelain")
+    existing = [
+        Path(line.removeprefix("worktree ")).resolve()
+        for line in output.splitlines() if line.startswith("worktree ")
+    ]
+    for worktree in existing:
+        if worktrees_root == worktree or worktrees_root.is_relative_to(worktree):
+            raise WorktreeError(
+                f"worktrees_root must be outside existing Git worktrees: {worktree}"
+            )
 
 
 def validate_task_worktree(task: TaskRecord) -> None:

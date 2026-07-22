@@ -43,10 +43,14 @@ git commit -m 'baseline'
 
 ```python
 from sdd.scheduler import LocalScheduler
-scheduler = LocalScheduler("runs", ".sdd-worktrees", max_concurrency=2)
+scheduler = LocalScheduler(
+    "/workspace/sdd-state/runs", "/workspace/sdd-worktrees", max_concurrency=2
+)
 task = scheduler.submit_task("/path/to/target", "health", run_id="run-health")
 print(task.worktree_path, task.branch)
 ```
+
+`runs_root` 与 `worktrees_root` 必须位于目标仓库及所有已登记 Git Worktree 之外；调度器会在创建目录前拒绝仓库内路径。
 
 ## 8. 提交多个任务
 
@@ -177,7 +181,7 @@ scheduler.cancel_task("date-format")
 scheduler.cleanup_task("health")
 ```
 
-必须是终态、`cleanup_allowed=true`、Archive 存在、Checkpoint/RunContext 的 run_id 一致、Worktree 干净且没有锁。清理只移除 Worktree。
+必须是终态、`cleanup_allowed=true`、Archive 存在、Checkpoint/RunContext 的 run_id 一致且没有锁。若 Worktree 含正常的未提交开发修改，当前 Diff 必须与 `code-diff.patch` 完全一致，所有变化路径必须存在于 ToolOperation/CodeChange，最终文件哈希也必须一致；任何额外未跟踪文件都会拒绝清理。验证通过后以普通（非 `--force`）方式移除 Worktree。
 
 ## 23. 查看 Archive
 
@@ -193,7 +197,7 @@ print((scheduler.runs_root / task.run_id / "archive.md").read_text())
 - “task branch already exists”：该 task_id 已经使用；框架不会替你删除分支。
 - “already locked”：先确认记录的 PID；陈旧锁也不会静默覆盖，显式 `release_task_lock` 会写入 `stale-locks.log`。
 - “persisted status does not match”：检查 `tasks.yaml`、Checkpoint 和 RunContext 是否属于同一 run_id。
-- “unarchived changes”：先归档并提交或人工处理 Worktree 修改；框架不 reset/clean。
+- “unarchived changes”：检查当前 Diff 是否仍等于 `code-diff.patch`，以及路径和最终 SHA-256 是否都有本次运行证据；额外文件或归档后的改动必须人工处理。
 
 ## 25. 安全边界
 
@@ -207,7 +211,11 @@ print((scheduler.runs_root / task.run_id / "archive.md").read_text())
 
 ```python
 from sdd.scheduler import LocalScheduler
-scheduler = LocalScheduler(runs_root="runs", worktrees_root=".sdd-worktrees", max_concurrency=2)
+scheduler = LocalScheduler(
+    runs_root="/workspace/sdd-state/runs",
+    worktrees_root="/workspace/sdd-worktrees",
+    max_concurrency=2,
+)
 scheduler.submit_task("/path/to/target", "health", run_id="run-health")
 scheduler.start_ready_tasks()
 task = scheduler.get_task("health")

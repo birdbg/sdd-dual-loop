@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
+import hashlib
 import os
 from pathlib import Path
 from typing import Callable
@@ -16,6 +17,7 @@ from sdd.task_lock import acquire_task_lock, is_task_locked, release_task_lock
 from sdd.task_registry import TERMINAL_STATUSES, TaskRegistry
 from sdd.worktree import create_task_worktree, validate_task_worktree
 from sdd.worktree import remove_task_worktree
+from sdd.workspace import baseline_diff
 
 
 class SchedulerError(RuntimeError):
@@ -246,7 +248,26 @@ class LocalScheduler:
         if status.returncode:
             raise SchedulerError("cannot inspect task Worktree before cleanup")
         if status.stdout.strip():
-            raise SchedulerError("task Worktree has unarchived changes")
+            archived_diff = (run_dir / "code-diff.patch").read_text(encoding="utf-8")
+            if baseline_diff(context.workspace) != archived_diff:
+                raise SchedulerError("task Worktree has unarchived changes: archived diff differs")
+            changed_paths = _changed_paths(worktree)
+            evidence = {
+                item.path: item.content_sha256
+                for item in [*context.tool_operations, *context.code_changes]
+                if item.content_sha256
+            }
+            if not changed_paths or not changed_paths.issubset(evidence):
+                unexplained = sorted(changed_paths - evidence.keys())
+                raise SchedulerError(
+                    f"task Worktree has unarchived changes: path lacks run evidence: {unexplained}"
+                )
+            for relative in changed_paths:
+                target = worktree / relative
+                actual = hashlib.sha256(target.read_bytes()).hexdigest() if target.is_file() else ""
+                if actual != evidence[relative]:
+                    raise SchedulerError("task Worktree has unarchived changes: content hash differs")
+            _discard_verified_archive_changes(worktree)
         remove_task_worktree(task)
         task.cleanup_allowed = False
         self.registry.update_task(task)
@@ -268,6 +289,49 @@ class LocalScheduler:
 
 def _now() -> str:
     return datetime.now(timezone.utc).isoformat()
+
+
+def _changed_paths(worktree: Path) -> set[str]:
+    import subprocess
+    result = subprocess.run(
+        ["git", "status", "--porcelain=v1", "-z", "--untracked-files=all"],
+        cwd=worktree, capture_output=True, check=False,
+    )
+    if result.returncode:
+        raise SchedulerError("cannot inspect task Worktree paths before cleanup")
+    entries = [item for item in result.stdout.split(b"\0") if item]
+    paths: set[str] = set()
+    index = 0
+    while index < len(entries):
+        entry = entries[index].decode("utf-8", errors="surrogateescape")
+        status = entry[:2]
+        paths.add(entry[3:])
+        if "R" in status or "C" in status:
+            index += 1
+            if index < len(entries):
+                paths.add(entries[index].decode("utf-8", errors="surrogateescape"))
+        index += 1
+    return paths
+
+
+def _discard_verified_archive_changes(worktree: Path) -> None:
+    """Make a verified archived Worktree clean so normal removal can be used."""
+    import subprocess
+    untracked = subprocess.run(
+        ["git", "ls-files", "--others", "--exclude-standard", "-z"], cwd=worktree,
+        capture_output=True, check=True,
+    ).stdout.split(b"\0")
+    restored = subprocess.run(
+        ["git", "restore", "--source=HEAD", "--staged", "--worktree", "--", "."],
+        cwd=worktree, text=True, capture_output=True, check=False,
+    )
+    if restored.returncode:
+        raise SchedulerError("cannot restore archived task changes before cleanup")
+    for raw in untracked:
+        if raw:
+            target = worktree / raw.decode("utf-8", errors="surrogateescape")
+            if target.is_file() or target.is_symlink():
+                target.unlink()
 
 
 def submit_task(scheduler: LocalScheduler, *args: object, **kwargs: object) -> TaskRecord:

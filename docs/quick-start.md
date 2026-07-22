@@ -15,8 +15,8 @@ python3.11 -m venv .venv
 from sdd.scheduler import LocalScheduler
 
 scheduler = LocalScheduler(
-    runs_root="runs",
-    worktrees_root=".sdd-worktrees",
+    runs_root="/workspace/sdd-state/runs",
+    worktrees_root="/workspace/sdd-worktrees",
     max_concurrency=2,
 )
 scheduler.submit_task("/absolute/path/to/repository", "customer-search", run_id="run-customer-search")
@@ -48,9 +48,9 @@ scheduler.resume_task(task.task_id)                 # 只进入 queued
 scheduler.start_ready_tasks()                       # 有槽位才恢复 running
 ```
 
-状态位于 `runs/tasks.yaml`，运行上下文和 Checkpoint 分别位于 `runs/<run-id>/run-context.yaml` 与 `checkpoint.yaml`，归档入口是 `runs/<run-id>/archive.md`。
+两个根目录必须位于目标仓库及所有已登记 Git Worktree 之外。状态位于 `<runs_root>/tasks.yaml`，运行上下文和 Checkpoint 分别位于 `<runs_root>/<run-id>/run-context.yaml` 与 `checkpoint.yaml`，归档入口是 `<runs_root>/<run-id>/archive.md`。
 
-终态任务只有在 Archive 存在、Worktree 干净且锁已释放时才能清理：
+终态任务只有在 Archive 存在、锁已释放，且当前 Diff、变化路径和文件哈希均能被该运行的 Archive 与操作证据完整解释时才能清理：
 
 ```python
 scheduler.cleanup_task(task.task_id)
