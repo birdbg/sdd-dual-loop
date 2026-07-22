@@ -1,5 +1,6 @@
 from pathlib import Path
 import subprocess
+import pytest
 
 from sdd.change_spec import apply_spec_change
 from sdd.m3 import M3Runner
@@ -30,9 +31,12 @@ def test_ambiguity_resume_lifecycle_keeps_revision_links(tmp_path: Path) -> None
         ExecutionFeedback("spec_ambiguous", "change_spec", "four choices unspecified", "request human decision"),
         "verify", tmp_path,
     )
-    apply_spec_change(context, "resolve search semantics", [
+    runner.apply_spec_change(context, "resolve search semantics", [
         "case insensitive", "contains match", "return all matches", "HTTP 200 with an empty list",
-    ], "product-owner", tmp_path)
+    ], "product-owner", remove_acceptance_criteria=["unspecified matching"])
+    context.verify_result = VerifyResult(True)
+    with pytest.raises(ValueError, match="Plan"):
+        runner.record_verify(context, revised=True)
     context.plan = Plan()
     runner.record_plan(context, revised=True)
     context.verify_result = VerifyResult(True)
@@ -100,46 +104,51 @@ def test_order_search_end_to_end_with_two_interruptions(tmp_path: Path) -> None:
     ), "verify", runs)
 
     # First process interruption: only persisted YAML is used afterward.
-    context = resume_run(context.run_id, runs, repository)
-    apply_spec_change(context, "define order search behavior", [
+    context = runner.resume(context.run_id, repository)
+    runner.apply_spec_change(context, "define order search behavior", [
         "customer name matching is case insensitive",
         "customer name uses contains matching",
         "return every matching order",
-        "no result returns HTTP 200 and an empty list",
-    ], "product-owner", runs)
-    context.history.append("brainstorming-r2")
-    context.plan = Plan([Task("orders-r2", "implement clarified search", ["app/main.py"])])
-    runner.record_plan(context, revised=True)
+    ], "product-owner",
+        remove_acceptance_criteria=["matching semantics unspecified"],
+        add_acceptance_criteria=["no result returns HTTP 200", "response is an empty list"])
+
+    def brainstorm(current):
+        current.history.append("brainstorming-r2")
+
+    def plan(current):
+        current.plan = Plan([Task("orders-r2", "implement clarified search", ["app/main.py"])])
+
+    # Continue through the intention loop and stop at Verify for the second interruption.
+    with pytest.raises(ValueError, match="verify callback"):
+        runner.continue_run(context, repository, develop=lambda *_: None,
+                            brainstorm=brainstorm, plan=plan)
 
     # Second process interruption resumes at Verify, without branch creation.
-    context = resume_run(context.run_id, runs, repository)
+    context = runner.resume(context.run_id, repository)
     assert context.current_node == "verify"
-    context.verify_result = VerifyResult(True)
-    runner.record_verify(context, revised=True)
-    tools = RepositoryTools(context.workspace, ["app/main.py"])
-    tools.write_file("app/main.py", (
-        "from fastapi import FastAPI\n"
-        "app = FastAPI()\n"
-        "ORDERS = [{'id': 1, 'customer_name': 'Alice'}, {'id': 2, 'customer_name': 'ALICIA'}, "
-        "{'id': 3, 'customer_name': 'Bob'}]\n"
-        "@app.get('/orders')\n"
-        "def orders(customer_name: str):\n"
-        " needle = customer_name.casefold()\n"
-        " return [order for order in ORDERS if needle in order['customer_name'].casefold()]\n"
-    ), context.iteration)
-    context.tool_operations = list(tools.operations)
-    result, executions = SddTestRunner(repository, context.repository_profile).run()
-    context.test_result = result
-    context.test_executions.extend(executions)
-    assert result.passed
-    context.refactor_result = RefactorResult(False, "implementation is already minimal")
-    result, executions = SddTestRunner(repository, context.repository_profile).run()
-    context.test_result = result
-    context.test_executions.extend(executions)
-    assert result.passed
-    context.status, context.current_node = "completed", "archive"
-    context.last_completed_node, context.resume_allowed = "refactor", False
-    archive_run(context, runs, baseline_diff(context.workspace))
+    branch_before = subprocess.run(["git", "branch", "--show-current"], cwd=repository,
+                                   text=True, check=True, capture_output=True).stdout.strip()
+
+    def verify(current):
+        current.verify_result = VerifyResult(True)
+
+    def develop(current, tools):
+        tools.write_file("app/main.py", (
+            "from fastapi import FastAPI\n"
+            "app = FastAPI()\n"
+            "ORDERS = [{'id': 1, 'customer_name': 'Alice'}, {'id': 2, 'customer_name': 'ALICIA'}, "
+            "{'id': 3, 'customer_name': 'Bob'}]\n"
+            "@app.get('/orders')\n"
+            "def orders(customer_name: str):\n"
+            " needle = customer_name.casefold()\n"
+            " return [order for order in ORDERS if needle in order['customer_name'].casefold()]\n"
+        ), current.iteration)
+
+    context = runner.resume_and_continue(context.run_id, repository, verify=verify,
+                                         develop=develop)
+    assert subprocess.run(["git", "branch", "--show-current"], cwd=repository,
+                          text=True, check=True, capture_output=True).stdout.strip() == branch_before
 
     run_dir = runs / context.run_id
     assert context.status == "completed"
@@ -148,6 +157,7 @@ def test_order_search_end_to_end_with_two_interruptions(tmp_path: Path) -> None:
     assert context.routing_history[0].target_node == "change_spec"
     assert context.plan.spec_revision == 2
     assert context.verify_result.plan_revision == 2
+    assert "matching semantics unspecified" not in context.spec.acceptance_criteria
     assert all((run_dir / name).exists() for name in [
         "checkpoint.yaml", "run-context.yaml", "routing-history.yaml", "archive.md", "code-diff.patch"
     ])

@@ -51,6 +51,10 @@ def save_plan_revision(context: RunContext, runs_root: str | Path) -> Path:
 
 def save_verify_revision(context: RunContext, runs_root: str | Path) -> Path:
     result = context.verify_result
+    if context.plan is None or (
+        context.plan.spec_revision, context.plan.revision
+    ) != (context.spec_version, context.plan_version):
+        raise ValueError("Verify requires a Plan based on the current Spec revision")
     if result is None or (result.spec_revision, result.plan_revision, result.revision) != (
         context.spec_version, context.plan_version, context.verify_version
     ):

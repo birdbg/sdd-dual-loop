@@ -2,7 +2,7 @@ from pathlib import Path
 import pytest
 
 from sdd.change_spec import apply_spec_change
-from sdd.models import RunContext, Spec
+from sdd.models import Plan, RunContext, Spec, VerifyResult
 
 
 def _context() -> RunContext:
@@ -45,3 +45,22 @@ def test_change_limit_pauses_safely(tmp_path: Path) -> None:
     with pytest.raises(ValueError, match="maximum"):
         apply_spec_change(context, "reason", ["change"], "owner", tmp_path)
     assert context.status == "awaiting_human"
+
+
+def test_structured_change_removes_ambiguity_and_invalidates_old_intent(tmp_path: Path) -> None:
+    context = _context()
+    context.plan = Plan(spec_revision=1, revision=1)
+    context.verify_result = VerifyResult(False)
+    apply_spec_change(
+        context, "resolve semantics",
+        ["case insensitive", "contains match", "return all matching orders"],
+        "owner", tmp_path,
+        remove_acceptance_criteria=["works"],
+        add_acceptance_criteria=["no match returns HTTP 200", "response is an empty list"],
+    )
+    assert context.spec == Spec(
+        ["original", "case insensitive", "contains match", "return all matching orders"],
+        ["no match returns HTTP 200", "response is an empty list"],
+    )
+    assert context.plan is None
+    assert context.verify_result is None

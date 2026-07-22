@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import subprocess
+import hashlib
 from pathlib import Path
 
 from sdd.checkpoint import load_checkpoint
@@ -65,14 +66,19 @@ def resume_run(run_id: str, runs_root: str | Path, repository: str | Path):
     if ancestor.returncode != 0:
         raise ResumeError("current branch history does not contain base_commit")
 
-    allowed = {item.path for item in context.tool_operations} | {item.path for item in context.code_changes}
+    evidence = {}
+    for item in [*context.code_changes, *context.tool_operations]:
+        if item.content_sha256:
+            evidence[item.path] = item.content_sha256
     unknown: list[str] = []
     for line in _git(root, "status", "--porcelain=v1", "--untracked-files=all").splitlines():
         path = line[3:]
         if " -> " in path:
             path = path.split(" -> ", 1)[1]
-        if path not in allowed:
+        target = root / path
+        actual = hashlib.sha256(target.read_bytes()).hexdigest() if target.is_file() else ""
+        if path not in evidence or actual != evidence[path]:
             unknown.append(path)
     if unknown:
-        raise ResumeError("working tree contains unexplained changes: " + ", ".join(sorted(unknown)))
+        raise ResumeError("working tree contains unexplained or content-mismatched changes: " + ", ".join(sorted(unknown)))
     return context

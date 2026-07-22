@@ -51,6 +51,7 @@ class VerifyResult:
 class CodeChange:
     path: str
     summary: str
+    content_sha256: str = ""
 
 
 @dataclass(slots=True)
@@ -115,6 +116,7 @@ class ToolOperation:
     path: str
     operation: Literal["write", "create"]
     iteration: int
+    content_sha256: str = ""
 
 
 @dataclass(slots=True)
@@ -163,6 +165,12 @@ class SpecChange:
     new_spec_version: int = 1
     approved_by: str = ""
     status: str = "pending"
+    add_requirements: list[str] = field(default_factory=list)
+    remove_requirements: list[str] = field(default_factory=list)
+    replace_requirements: dict[str, str] = field(default_factory=dict)
+    add_acceptance_criteria: list[str] = field(default_factory=list)
+    remove_acceptance_criteria: list[str] = field(default_factory=list)
+    replace_acceptance_criteria: dict[str, str] = field(default_factory=dict)
 
 
 @dataclass(slots=True)

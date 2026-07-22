@@ -1,4 +1,5 @@
 from pathlib import Path
+import hashlib
 import subprocess
 import pytest
 
@@ -57,8 +58,13 @@ def test_resume_rejects_unexplained_changes_and_false_permission(tmp_path: Path)
 
 def test_recorded_tool_change_is_explainable(tmp_path: Path) -> None:
     repo, runs, context = _persisted(tmp_path)
-    context.tool_operations.append(ToolOperation("known.txt", "write", 0))
     (repo / "known.txt").write_text("changed\n", encoding="utf-8")
+    digest = hashlib.sha256((repo / "known.txt").read_bytes()).hexdigest()
+    context.tool_operations.append(ToolOperation("known.txt", "write", 0, digest))
     save_checkpoint(context, runs)
     save_run_context(context, runs)
     assert resume_run("resume", runs, repo).tool_operations == context.tool_operations
+
+    (repo / "known.txt").write_text("externally replaced\n", encoding="utf-8")
+    with pytest.raises(ResumeError, match="content-mismatched"):
+        resume_run("resume", runs, repo)
