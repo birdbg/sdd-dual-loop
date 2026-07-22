@@ -1,37 +1,33 @@
 framework: sdd-dual-loop
 architecture_version: "1.0"
-milestone: M1
-completion_standard: "docs/milestones/M1.md#M1-完成标准"
+milestone: M2
+completion_standard: "docs/milestones/M2.md#M2-完成标准"
 
 status: completed
 current_task: null
 current_order_item: null
 
 implementation_order:
-  - directory_and_run_context
-  - purpose
-  - brainstorming
-  - spec_and_plan
-  - verify
-  - development
-  - testing
-  - refactor
-  - archive
-  - end_to_end_case
+  - repository_profile
+  - isolated_branch
+  - restricted_tools
+  - test_feedback_loop
+  - minimal_ci
+  - end_to_end_acceptance
 
 checkpoints:
-  - task: directory_and_run_context
+  - task: repository_profile
     status: completed
-    verification: ".venv/bin/python -m pytest tests/test_models.py -q"
-    result: "1 passed in 0.01s"
-  - task: purpose
+    verification: "tests/test_m2.py::test_repository_profile_discovers_two_layouts"
+    result: "src/pyproject.toml and flat/requirements.txt layouts passed"
+  - task: isolated_branch_and_tools
     status: completed
-    verification: ".venv/bin/python -m pytest tests/test_purpose.py -q"
-    result: "2 passed in 0.88s"
-  - task: end_to_end_case
+    verification: "tests/test_m2.py::test_workspace_and_tools_are_isolated_and_audited"
+    result: "branch, baseline diff, audit and path boundaries passed"
+  - task: feedback_and_archive
     status: completed
-    verification: ".venv/bin/python -m pytest examples/fastapi-user-query/tests -q"
-    result: "6 passed, 1 warning in 0.10s after refactor; run 20260722T141719+0800 archived"
+    verification: "tests/test_m2.py::test_runner_uses_real_failure_then_completes"
+    result: "real pytest failure returned to Dev and passed on iteration 1"
 
 completed:
   - architecture_document
@@ -51,10 +47,18 @@ completed:
   - post_refactor_test
   - run_archive
   - m1_acceptance
+  - repository_discovery
+  - git_branch_isolation
+  - restricted_file_tools
+  - failure_classification
+  - two_rework_limit
+  - complete_run_archive
+  - minimal_ci
+  - m2_acceptance
 
 pending: []
 
-last_successful_command: ".venv/bin/python -m pytest examples/fastapi-user-query/tests -q"
+last_successful_command: ".venv/bin/python -m pytest -q"
 last_error: null
 retry_count: 0
-updated_at: "2026-07-22T14:42:00+08:00"
+updated_at: "2026-07-22T16:30:00+08:00"

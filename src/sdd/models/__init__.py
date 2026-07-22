@@ -11,6 +11,11 @@ from .artifacts import (
     Task,
     TestResult,
     VerifyResult,
+    RepositoryProfile,
+    WorkspaceRecord,
+    ToolOperation,
+    TestExecution,
+    ExecutionFeedback,
 )
 from .run_context import RunContext
 
@@ -26,4 +31,9 @@ __all__ = [
     "Task",
     "TestResult",
     "VerifyResult",
+    "RepositoryProfile",
+    "WorkspaceRecord",
+    "ToolOperation",
+    "TestExecution",
+    "ExecutionFeedback",
 ]
