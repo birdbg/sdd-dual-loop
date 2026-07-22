@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+import hashlib
 
 from sdd.models import ToolOperation, WorkspaceRecord
 from sdd.workspace import baseline_diff
@@ -62,7 +63,7 @@ class RepositoryTools:
         relative = target.relative_to(self.root).as_posix()
         self.originals.setdefault(relative, target.read_text(encoding="utf-8"))
         target.write_text(content, encoding="utf-8")
-        self.operations.append(ToolOperation(relative, "write", iteration))
+        self.operations.append(ToolOperation(relative, "write", iteration, _sha256(target)))
 
     def create_file(self, path: str, content: str, iteration: int = 0) -> None:
         target = self._resolve(path, require_exists=False, write=True)
@@ -71,7 +72,9 @@ class RepositoryTools:
         if not target.parent.is_dir():
             raise ToolBoundaryError("parent directory must already exist")
         target.write_text(content, encoding="utf-8")
-        self.operations.append(ToolOperation(target.relative_to(self.root).as_posix(), "create", iteration))
+        self.operations.append(ToolOperation(
+            target.relative_to(self.root).as_posix(), "create", iteration, _sha256(target)
+        ))
 
     def show_diff(self) -> str:
         return baseline_diff(self.workspace)
@@ -96,3 +99,7 @@ class RepositoryTools:
         if write and self._write_boundary_enabled and relative not in self.allowed_paths:
             raise ToolBoundaryError(f"path is outside the verified plan: {relative}")
         return resolved
+
+
+def _sha256(path: Path) -> str:
+    return hashlib.sha256(path.read_bytes()).hexdigest()

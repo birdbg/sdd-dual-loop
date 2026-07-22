@@ -12,7 +12,6 @@ from sdd.models import RefactorResult, RunContext
 from sdd.repository import scan_repository
 from sdd.tools import RepositoryTools
 from sdd.workspace import WorkspaceError, baseline_diff, create_workspace
-from sdd.routing import route_feedback
 
 Develop = Callable[[RunContext, RepositoryTools], None]
 Refactor = Callable[[RunContext, RepositoryTools], None]
@@ -76,7 +75,7 @@ class M2Runner:
                         break
                 output = executions[-1].output if executions else "; ".join(result.details)
                 feedback = classify_failure(output, exit_code=executions[-1].exit_code if executions else 1)
-                route_feedback(context, feedback, context.current_node, self.runs_root)
+                self._route_failure(context, feedback)
                 if feedback.category == "blocked":
                     break
                 if feedback.category == "spec_ambiguous":
@@ -130,3 +129,18 @@ class M2Runner:
         if context.plan is None:
             return []
         return sorted({path for task in context.plan.tasks for path in task.allowed_paths})
+
+    @staticmethod
+    def _route_failure(context: RunContext, feedback: object) -> None:
+        """M2 keeps only transient execution routing; M3 adds durable routing evidence."""
+        routes = {
+            "code_error": ("development", "running"),
+            "test_error": ("testing", "running"),
+            "plan_omission": ("planning", "running"),
+            "spec_ambiguous": ("change_spec", "awaiting_human"),
+            "purpose_conflict": ("purpose", "running"),
+            "blocked": ("archive", "blocked"),
+        }
+        category = feedback.category
+        context.feedback.append(feedback)
+        context.current_node, context.status = routes[category]
