@@ -1,0 +1,29 @@
+run_id: "20260722T141719+0800"
+status: passed
+verified_at: "2026-07-22T14:17:19+08:00"
+checks:
+  requirements_complete:
+    passed: true
+    evidence: "R1-R6 逐条覆盖 input.md 的六项限制。"
+  acceptance_criteria_testable:
+    passed: true
+    evidence: "AC1-AC4 均给出输入、请求和可观测的 HTTP/pytest 结果。"
+  plan_traceability:
+    passed: true
+    evidence: "T1-T5 的 traces_to 联合集合覆盖 R1-R6。"
+  scope_controlled:
+    passed: true
+    evidence: "明确排除持久化、写接口、认证及其他额外功能。"
+  baseline_confirmed:
+    passed: true
+    evidence:
+      route_search: "目标路由不存在；仅命中 app/main.py:11 的 get_users。"
+      command: ".venv/bin/python -m pytest examples/fastapi-user-query/tests -q"
+      exit_code: 0
+      summary: "1 passed, 1 warning in 0.13s"
+feedback: []
+human_gate:
+  status: approved
+  confirmed_by: user
+  confirmed_at: "2026-07-22T14:20:00+08:00"
+next_stage: development

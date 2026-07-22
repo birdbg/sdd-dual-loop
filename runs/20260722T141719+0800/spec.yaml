@@ -1,0 +1,40 @@
+run_id: "20260722T141719+0800"
+feature: user_query_by_id
+requirements:
+  - id: R1
+    statement: "提供 GET /users/{user_id}。"
+  - id: R2
+    statement: "存在的用户返回 HTTP 200。"
+  - id: R3
+    statement: "成功响应包含 id、username 和 email。"
+  - id: R4
+    statement: "不存在的用户返回 HTTP 404。"
+  - id: R5
+    statement: "user_id 只接受正整数。"
+  - id: R6
+    statement: "为新增行为增加单元测试。"
+acceptance_criteria:
+  - id: AC1
+    traces_to: [R1, R2, R3]
+    given: "用户 1 存在于内存数据中"
+    when: "GET /users/1"
+    then: "响应状态为 200，JSON 精确包含 id=1、username=alice、email=alice@example.com"
+  - id: AC2
+    traces_to: [R1, R4]
+    given: "用户 999 不存在"
+    when: "GET /users/999"
+    then: "响应状态为 404"
+  - id: AC3
+    traces_to: [R1, R5]
+    given: "路径参数为 0、负数或非整数"
+    when: "请求对应的用户查询路径"
+    then: "响应状态为 422，且不会当作有效用户查询"
+  - id: AC4
+    traces_to: [R6]
+    given: "实现和新增测试已经落盘"
+    when: "执行 .venv/bin/python -m pytest examples/fastapi-user-query/tests -q"
+    then: "pytest 退出码为 0，既有列表测试和新增测试全部通过"
+constraints:
+  - "保留 GET /users 的现有行为"
+  - "仅使用现有内存数据，不增加持久化"
+  - "不增加需求之外的功能"

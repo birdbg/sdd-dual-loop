@@ -1,0 +1,21 @@
+run_id: "20260722T141719+0800"
+test_command: ".venv/bin/python -m pytest examples/fastapi-user-query/tests -q"
+runs:
+  - phase: after_development
+    executed: true
+    exit_code: 0
+    passed: 6
+    failed: 0
+    duration_seconds: 0.13
+    output_summary: "6 passed, 1 warning in 0.13s"
+  - phase: after_refactor
+    executed: true
+    exit_code: 0
+    passed: 6
+    failed: 0
+    duration_seconds: 0.10
+    output_summary: "6 passed, 1 warning in 0.10s"
+result: passed
+warning:
+  category: StarletteDeprecationWarning
+  message: "当前 FastAPI TestClient 通过已弃用的 Starlette httpx 兼容层导入；不影响本次结果。"
