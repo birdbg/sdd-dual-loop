@@ -1,0 +1,18 @@
+# Input
+
+Source: `examples/fastapi-user-query/requirement.md`
+
+# 开发要求：根据用户 ID 查询用户
+
+请为现有 FastAPI 示例项目新增“根据用户 ID 查询用户”的接口。
+
+## 需求限制
+
+1. 提供 `GET /users/{user_id}`。
+2. 用户存在时返回 HTTP 200。
+3. 响应包含 `id`、`username` 和 `email`。
+4. 用户不存在时返回 HTTP 404。
+5. `user_id` 必须为正整数。
+6. 为新增行为增加单元测试。
+
+除满足以上要求所必需的修改外，不增加其他功能。

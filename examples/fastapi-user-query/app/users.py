@@ -17,3 +17,12 @@ _USERS = (
 
 def list_users() -> list[User]:
     return list(_USERS)
+
+
+def find_user(user_id: int) -> User | None:
+    """Return the user with the requested ID, if it exists."""
+
+    for user in _USERS:
+        if user.id == user_id:
+            return user
+    return None
