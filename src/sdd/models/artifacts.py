@@ -180,3 +180,23 @@ class RoutingDecision:
     target_node: str
     evidence: str
     decision: str
+
+
+@dataclass(slots=True)
+class TaskRecord:
+    """External scheduling record; deliberately not a dual-loop artifact."""
+
+    task_id: str
+    run_id: str
+    repository: str
+    worktree_path: str
+    branch: str
+    base_commit: str
+    status: str = "queued"
+    created_at: str = ""
+    started_at: str | None = None
+    finished_at: str | None = None
+    current_node: str | None = None
+    pid: int | None = None
+    error: str | None = None
+    cleanup_allowed: bool = False
