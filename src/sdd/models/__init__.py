@@ -16,6 +16,9 @@ from .artifacts import (
     ToolOperation,
     TestExecution,
     ExecutionFeedback,
+    Checkpoint,
+    SpecChange,
+    RoutingDecision,
 )
 from .run_context import RunContext
 
@@ -36,4 +39,7 @@ __all__ = [
     "ToolOperation",
     "TestExecution",
     "ExecutionFeedback",
+    "Checkpoint",
+    "SpecChange",
+    "RoutingDecision",
 ]

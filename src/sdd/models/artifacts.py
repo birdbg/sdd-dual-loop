@@ -132,3 +132,38 @@ class ExecutionFeedback:
     target: Literal["development", "testing", "planning", "change_spec", "archive"]
     evidence: str
     decision: str
+
+
+@dataclass(slots=True)
+class Checkpoint:
+    run_id: str
+    status: str
+    current_node: str
+    last_completed_node: str | None
+    iteration: int
+    spec_version: int
+    plan_version: int
+    verify_version: int
+    base_commit: str
+    work_branch: str
+    resume_allowed: bool
+
+
+@dataclass(slots=True)
+class SpecChange:
+    change_id: str
+    reason: str
+    changes: list[str] = field(default_factory=list)
+    previous_spec_version: int = 1
+    new_spec_version: int = 1
+    approved_by: str = ""
+    status: str = "pending"
+
+
+@dataclass(slots=True)
+class RoutingDecision:
+    category: str
+    source_node: str
+    target_node: str
+    evidence: str
+    decision: str

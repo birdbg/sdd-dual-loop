@@ -1,11 +1,11 @@
 framework: sdd-dual-loop
 architecture_version: "1.0"
-milestone: M2
-completion_standard: "docs/milestones/M2.md#M2-完成标准"
+milestone: M3
+completion_standard: "docs/milestones/M3.md#第一阶段完成标准"
 
-status: completed
-current_task: null
-current_order_item: null
+status: in_progress
+current_task: define_m3_scope_and_models
+current_order_item: 1
 
 implementation_order:
   - repository_profile
@@ -55,10 +55,21 @@ completed:
   - complete_run_archive
   - minimal_ci
   - m2_acceptance
+  - m2_completed
+  - m3_scope_defined
+  - m3_models_defined
+  - m3_run_context_extended
+  - m3_model_tests
 
-pending: []
+pending:
+  - checkpoint_persistence
+  - safe_resume
+  - manual_spec_change
+  - routing_execution
+  - versioned_artifacts
+  - m3_end_to_end_case
 
 last_successful_command: ".venv/bin/python -m pytest -q"
 last_error: null
 retry_count: 0
-updated_at: "2026-07-22T16:30:00+08:00"
+updated_at: "2026-07-22T17:00:00+08:00"

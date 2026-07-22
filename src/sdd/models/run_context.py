@@ -19,6 +19,8 @@ from .artifacts import (
     ToolOperation,
     TestExecution,
     ExecutionFeedback,
+    RoutingDecision,
+    SpecChange,
 )
 
 
@@ -49,3 +51,11 @@ class RunContext:
     feedback: list[ExecutionFeedback] = field(default_factory=list)
     errors: list[str] = field(default_factory=list)
     history: list[str] = field(default_factory=list)
+
+    spec_version: int = 1
+    plan_version: int = 1
+    verify_version: int = 1
+    last_completed_node: str | None = None
+    resume_allowed: bool = False
+    spec_changes: list[SpecChange] = field(default_factory=list)
+    routing_history: list[RoutingDecision] = field(default_factory=list)
