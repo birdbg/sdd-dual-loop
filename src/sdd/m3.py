@@ -81,6 +81,22 @@ class M3Runner(M2Runner):
         context = self.resume(run_id, repository)
         return self.continue_run(context, repository, **callbacks)
 
+    def unblock(self, context: RunContext, *, target_node: str, reason: str) -> RunContext:
+        """Record an explicit operator decision before a blocked run can continue."""
+        allowed_targets = {"brainstorming", "planning", "verify", "development", "testing", "refactor"}
+        if context.status != "blocked":
+            raise ValueError("only a blocked run can be unblocked")
+        if target_node not in allowed_targets:
+            raise ValueError("invalid unblock target node")
+        if not isinstance(reason, str) or not reason.strip():
+            raise ValueError("unblock reason must be non-empty")
+        previous = context.current_node
+        context.current_node = target_node
+        context.status = "running"
+        context.history.append(f"unblock:{previous}->{target_node}: {reason.strip()}")
+        self.persist(context)
+        return context
+
     def continue_run(
         self, context: RunContext, repository: str | Path, *,
         develop: Callable[[RunContext, RepositoryTools], None],
@@ -88,16 +104,18 @@ class M3Runner(M2Runner):
         plan: Callable[[RunContext], None] | None = None,
         verify: Callable[[RunContext], None] | None = None,
         refactor: Callable[[RunContext, RepositoryTools], None] | None = None,
+        repair_test: Callable[[RunContext, RepositoryTools], None] | None = None,
         related_tests: list[str] | None = None,
     ) -> RunContext:
         """Continue at ``current_node`` without rescanning or recreating a workspace."""
         if context.status == "awaiting_human":
             return context
-        if context.status not in {"running", "blocked"}:
+        if context.status == "blocked":
+            raise ValueError("blocked run requires an explicit unblock decision")
+        if context.status != "running":
             raise ValueError(f"status {context.status} cannot continue")
         if context.workspace is None or Path(context.workspace.repository).resolve() != Path(repository).resolve():
             raise ValueError("continuation requires the persisted workspace")
-        context.status = "running"
         while context.current_node in {"brainstorming", "planning", "verify"}:
             node = context.current_node
             callback = {"brainstorming": brainstorm, "planning": plan, "verify": verify}[node]
@@ -108,9 +126,9 @@ class M3Runner(M2Runner):
                 context.current_node = "planning"
                 self.persist(context, node)
             elif node == "planning":
-                self.record_plan(context, revised=context.plan_version > 1 or context.spec_version > 1)
+                self.record_plan(context, revised=self._revision_exists(context, "plan", context.plan_version))
             else:
-                self.record_verify(context, revised=context.verify_version > 1 or context.spec_version > 1)
+                self.record_verify(context, revised=self._revision_exists(context, "verify", context.verify_version))
                 if context.current_node == "verify":
                     return context
 
@@ -137,6 +155,15 @@ class M3Runner(M2Runner):
                         context.status = "failed"
                         self.persist(context, "testing")
                         return context
+                    if feedback.category == "test_error":
+                        if repair_test is None:
+                            context.status = "blocked"
+                            context.errors.append("test_error requires a repair_test callback")
+                            self.persist(context, "testing")
+                            return context
+                        repair_test(context, tools)
+                        context.tool_operations = list(tools.operations)
+                        self.persist(context, "testing")
                     continue
                 context.current_node = "refactor"
                 self.persist(context, "testing")
@@ -161,3 +188,6 @@ class M3Runner(M2Runner):
                 self.persist(context, "refactor")
                 archive_run(context, self.runs_root, baseline_diff(context.workspace))
         return context
+
+    def _revision_exists(self, context: RunContext, kind: str, version: int) -> bool:
+        return (self.runs_root / context.run_id / f"{kind}-r{version}.yaml").is_file()

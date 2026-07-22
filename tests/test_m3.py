@@ -6,7 +6,8 @@ from sdd.change_spec import apply_spec_change
 from sdd.m3 import M3Runner
 from sdd.models import (
     BrainstormResult, ExecutionFeedback, Plan, Purpose, RefactorResult, RunContext,
-    Spec, Task, VerifyResult,
+    RepositoryProfile, Spec, Task, TestExecution as SddTestExecution,
+    TestResult as SddTestResult, VerifyResult,
 )
 from sdd.routing import route_feedback
 from sdd.resume import resume_run
@@ -50,6 +51,107 @@ def test_ambiguity_resume_lifecycle_keeps_revision_links(tmp_path: Path) -> None
 
 def _git(root: Path, *args: str) -> None:
     subprocess.run(["git", *args], cwd=root, check=True, capture_output=True)
+
+
+def _workspace(tmp_path: Path, run_id: str):
+    repository = tmp_path / "repository"
+    repository.mkdir()
+    (repository / "app.py").write_text("value = 1\n", encoding="utf-8")
+    (repository / "test_app.py").write_text("def test_value(): pass\n", encoding="utf-8")
+    _git(repository, "init", "-b", "main")
+    _git(repository, "config", "user.email", "test@example.com")
+    _git(repository, "config", "user.name", "Test")
+    _git(repository, "add", ".")
+    _git(repository, "commit", "-m", "base")
+    return repository, create_workspace(repository, run_id)
+
+
+def test_plan_omission_creates_plan_and_verify_r2_without_overwrite(tmp_path: Path) -> None:
+    repository, workspace = _workspace(tmp_path, "replan")
+    runner = M3Runner(tmp_path / "runs")
+    context = RunContext("replan", "x", status="running")
+    context.workspace = workspace
+    context.spec = Spec(["requirement"], ["criterion"])
+    runner.record_spec(context)
+    context.plan = Plan([Task("r1", "first plan", ["app.py"])])
+    runner.record_plan(context)
+    context.verify_result = VerifyResult(False, ["plan omission"])
+    runner.record_verify(context)
+    first_plan = (runner.runs_root / "replan" / "plan-r1.yaml").read_text(encoding="utf-8")
+    runner.route_feedback(
+        context,
+        ExecutionFeedback("plan_omission", "planning", "missing planned file", "revise plan"),
+        "verify",
+    )
+
+    def revise_plan(current):
+        current.plan = Plan([Task("r2", "revised plan", ["app.py"])])
+
+    def revise_verify(current):
+        current.verify_result = VerifyResult(False, ["stop before development"])
+
+    runner.continue_run(context, repository, develop=lambda *_: None,
+                        plan=revise_plan, verify=revise_verify)
+    assert (context.plan_version, context.verify_version) == (2, 2)
+    assert (runner.runs_root / "replan" / "plan-r1.yaml").read_text(encoding="utf-8") == first_plan
+    assert (runner.runs_root / "replan" / "plan-r2.yaml").exists()
+    assert (runner.runs_root / "replan" / "verify-r2.yaml").exists()
+
+
+def test_test_error_uses_repair_callback_before_rerun(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    repository, workspace = _workspace(tmp_path, "repair")
+    runner = M3Runner(tmp_path / "runs")
+    context = RunContext("repair", "x", current_node="testing", status="running")
+    context.workspace = workspace
+    context.repository_profile = RepositoryProfile(test_command="python -m pytest")
+    context.plan = Plan([Task("test", "repair fixture", ["test_app.py"])])
+    calls = 0
+
+    class SequencedRunner:
+        def __init__(self, *_args):
+            pass
+
+        def run(self, _related=None):
+            nonlocal calls
+            calls += 1
+            passed = calls > 1
+            output = "passed" if passed else "fixture broken"
+            execution = SddTestExecution(["pytest"], str(repository), "test", 0 if passed else 1, output)
+            return SddTestResult(passed, 1, 0 if passed else 1, [output]), [execution]
+
+    monkeypatch.setattr("sdd.m3.TestRunner", SequencedRunner)
+    repairs = []
+
+    def repair_test(current, tools):
+        repairs.append(current.iteration)
+        tools.write_file("test_app.py", "def test_value(): assert True\n", current.iteration)
+
+    runner.continue_run(context, repository, develop=lambda *_: None, repair_test=repair_test)
+    assert repairs == [1]
+    assert calls == 3  # failed test, repaired test, post-refactor safety test
+    assert context.status == "completed"
+
+
+def test_blocked_run_requires_audited_unblock(tmp_path: Path) -> None:
+    repository, workspace = _workspace(tmp_path, "blocked")
+    runner = M3Runner(tmp_path / "runs")
+    context = RunContext("blocked", "x", current_node="archive", status="blocked")
+    context.workspace = workspace
+    runner.persist(context)
+    with pytest.raises(ValueError, match="explicit unblock"):
+        runner.continue_run(context, repository, develop=lambda *_: None)
+    assert context.status == "blocked"
+
+    runner.unblock(context, target_node="verify", reason="dependency restored")
+    context.plan = Plan()
+
+    def verify(current):
+        current.verify_result = VerifyResult(False, ["operator review"])
+
+    runner.continue_run(context, repository, develop=lambda *_: None, verify=verify)
+    assert context.status == "running"
+    assert context.current_node == "verify"
+    assert context.history[-1] == "unblock:archive->verify: dependency restored"
 
 
 def test_order_search_end_to_end_with_two_interruptions(tmp_path: Path) -> None:
