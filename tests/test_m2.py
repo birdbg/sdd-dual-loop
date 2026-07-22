@@ -152,7 +152,9 @@ def test_runner_uses_real_failure_then_completes(tmp_path: Path) -> None:
     assert [run.exit_code for run in context.test_executions] == [1, 0, 0]
     assert refactor_calls == 1
     assert context.refactor_result == RefactorResult(False, "nothing safe to improve")
-    assert (tmp_path / "runs" / "success-run" / "archive.md").exists()
+    archive = (tmp_path / "runs" / "success-run" / "archive.md").read_text()
+    assert "remains on `sdd/success-run`" in archive
+    assert "does not switch back, merge, or push automatically" in archive
     assert "nothing safe to improve" in (tmp_path / "runs" / "success-run" / "refactor.md").read_text()
 
 

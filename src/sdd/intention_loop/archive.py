@@ -16,12 +16,19 @@ def archive_run(context: RunContext, runs_root: str | Path, code_diff: str = "")
         raise ValueError("run_id must be one safe path component")
     destination = Path(runs_root).resolve() / context.run_id
     destination.mkdir(parents=True, exist_ok=False)
+    branch_notice = ""
+    if context.workspace is not None:
+        branch_notice = (
+            "\n\n## Workspace reminder\n\n"
+            f"The target repository remains on `{context.workspace.work_branch}`. "
+            "M2 does not switch back, merge, or push automatically.\n"
+        )
     markdown = {
         "input.md": context.input,
         "purpose.md": _markdown(context.purpose),
         "brainstorming.md": _markdown(context.brainstorm_result),
         "refactor.md": _markdown(context.refactor_result),
-        "archive.md": f"# Run {context.run_id}\n\nStatus: `{context.status}`\n",
+        "archive.md": f"# Run {context.run_id}\n\nStatus: `{context.status}`{branch_notice}\n",
     }
     yamls = {
         "repository-profile.yaml": context.repository_profile,

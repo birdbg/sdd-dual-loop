@@ -9,3 +9,5 @@
 ## 当前状态
 
 M2 支撑组件位于 `sdd.repository`、`sdd.workspace` 和 `sdd.tools`。执行环根据真实测试输出分类回流，最多返工两次；不会自动合并或推送目标仓库。
+
+M2 当前使用 `git switch -c sdd/<run-id>` 创建隔离分支，不使用 Git Worktree。运行结束后目标仓库仍停留在该工作分支，框架不会自动切回原分支；请在检查或处理 Diff 后由使用者手动切换分支。
