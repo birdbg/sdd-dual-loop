@@ -15,6 +15,7 @@ from sdd.state_store import load_run_context
 from sdd.task_lock import acquire_task_lock, is_task_locked, release_task_lock
 from sdd.task_registry import TERMINAL_STATUSES, TaskRegistry
 from sdd.worktree import create_task_worktree, validate_task_worktree
+from sdd.worktree import remove_task_worktree
 
 
 class SchedulerError(RuntimeError):
@@ -216,6 +217,41 @@ class LocalScheduler:
             release_task_lock(task_id, self.locks_root)
         return self.registry.get_task(task_id)
 
+    def cleanup_task(self, task_id: str) -> TaskRecord:
+        task = self.registry.get_task(task_id)
+        if task.status not in TERMINAL_STATUSES:
+            raise SchedulerError("cleanup is only allowed for terminal tasks")
+        if not task.cleanup_allowed:
+            raise SchedulerError("TaskRecord does not allow cleanup")
+        validate_task_worktree(task)
+        lock_path = self.locks_root / f"{task.task_id}.lock"
+        if lock_path.exists():
+            raise SchedulerError("task lock must be released before cleanup")
+        try:
+            checkpoint = load_checkpoint(task.run_id, self.runs_root)
+            context = load_run_context(task.run_id, self.runs_root)
+        except (OSError, ValueError) as error:
+            raise SchedulerError(f"cannot validate persisted run for cleanup: {error}") from error
+        if checkpoint.run_id != task.run_id or context.run_id != task.run_id:
+            raise SchedulerError("persisted run_id does not match TaskRecord")
+        run_dir = self.runs_root / task.run_id
+        if context.archive is None or not (run_dir / "archive.md").is_file():
+            raise SchedulerError("Archive must exist before cleanup")
+        worktree = Path(task.worktree_path)
+        import subprocess
+        status = subprocess.run(
+            ["git", "status", "--porcelain=v1", "--untracked-files=all"], cwd=worktree,
+            text=True, capture_output=True, check=False,
+        )
+        if status.returncode:
+            raise SchedulerError("cannot inspect task Worktree before cleanup")
+        if status.stdout.strip():
+            raise SchedulerError("task Worktree has unarchived changes")
+        remove_task_worktree(task)
+        task.cleanup_allowed = False
+        self.registry.update_task(task)
+        return self.registry.get_task(task_id)
+
     def get_scheduler_summary(self) -> dict[str, object]:
         tasks = self.registry.list_tasks()
         occupied = sum(task.status in {"starting", "running"} for task in tasks)
@@ -244,5 +280,7 @@ def resume_task(scheduler: LocalScheduler, task_id: str) -> TaskRecord:
     return scheduler.resume_task(task_id)
 def cancel_task(scheduler: LocalScheduler, task_id: str) -> TaskRecord:
     return scheduler.cancel_task(task_id)
+def cleanup_task(scheduler: LocalScheduler, task_id: str) -> TaskRecord:
+    return scheduler.cleanup_task(task_id)
 def get_scheduler_summary(scheduler: LocalScheduler) -> dict[str, object]:
     return scheduler.get_scheduler_summary()

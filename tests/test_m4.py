@@ -3,6 +3,10 @@ import subprocess
 
 from sdd.models import Plan, Spec, Task, VerifyResult
 from sdd.scheduler import LocalScheduler
+from sdd.intention_loop.archive import archive_run
+from sdd.scheduler import SchedulerError
+from sdd.task_lock import acquire_task_lock, release_task_lock
+import pytest
 
 
 def git(root: Path, *args: str) -> str:
@@ -91,3 +95,50 @@ def test_three_tasks_keep_worktrees_and_m3_state_isolated(tmp_path: Path) -> Non
     assert git(repository, "branch", "--show-current") == main_branch
     assert (repository / "app" / "main.py").read_text() == main_content
     assert git(repository, "status", "--porcelain") == ""
+
+
+def test_terminal_cleanup_is_safe_and_retains_branch_and_archive(tmp_path: Path) -> None:
+    repository = fastapi_repo(tmp_path)
+    scheduler = LocalScheduler(tmp_path / "runs", tmp_path / "trees", 2)
+    scheduler.submit_task(repository, "done", run_id="run-done")
+    scheduler.submit_task(repository, "other", run_id="run-other")
+    scheduler.start_ready_tasks()
+    done = scheduler.get_task("done")
+    context = scheduler.prepare_run_context("done", "health")
+    context.status = "completed"
+    context.current_node = "archive"
+    context.resume_allowed = False
+    archive_run(context, scheduler.runs_root)
+    scheduler.sync_from_context("done", context)
+
+    assert Path(done.worktree_path).exists()
+    scheduler.cleanup_task("done")
+    assert not Path(done.worktree_path).exists()
+    assert git(repository, "show-ref", "--verify", "refs/heads/sdd/done")
+    assert (scheduler.runs_root / done.run_id / "archive.md").exists()
+    assert Path(scheduler.get_task("other").worktree_path).exists()
+
+
+def test_cleanup_guards_state_archive_changes_and_lock(tmp_path: Path) -> None:
+    repository = fastapi_repo(tmp_path)
+    scheduler = LocalScheduler(tmp_path / "runs", tmp_path / "trees", 1)
+    scheduler.submit_task(repository, "guard", run_id="run-guard")
+    scheduler.start_ready_tasks()
+    with pytest.raises(SchedulerError, match="terminal"):
+        scheduler.cleanup_task("guard")
+    task = scheduler.get_task("guard")
+    context = scheduler.prepare_run_context("guard", "date")
+    context.status = "failed"
+    context.current_node = "testing"
+    scheduler.runner_for(task).persist(context)
+    scheduler.sync_from_context("guard", context)
+    with pytest.raises(SchedulerError, match="Archive"):
+        scheduler.cleanup_task("guard")
+    archive_run(context, scheduler.runs_root)
+    acquire_task_lock("guard", scheduler.locks_root)
+    with pytest.raises(SchedulerError, match="lock"):
+        scheduler.cleanup_task("guard")
+    release_task_lock("guard", scheduler.locks_root)
+    (Path(task.worktree_path) / "local.txt").write_text("not archived")
+    with pytest.raises(SchedulerError, match="unarchived"):
+        scheduler.cleanup_task("guard")
