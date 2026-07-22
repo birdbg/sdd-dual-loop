@@ -1,4 +1,4 @@
-"""The single context object passed through all M1 nodes."""
+"""The single context object passed through all dual-loop nodes."""
 
 from dataclasses import dataclass, field
 
@@ -14,6 +14,11 @@ from .artifacts import (
     Spec,
     TestResult,
     VerifyResult,
+    RepositoryProfile,
+    WorkspaceRecord,
+    ToolOperation,
+    TestExecution,
+    ExecutionFeedback,
 )
 
 
@@ -36,6 +41,11 @@ class RunContext:
     archive: Archive | None = None
 
     iteration: int = 0
-    max_iterations: int = 1
+    max_iterations: int = 2
+    repository_profile: RepositoryProfile | None = None
+    workspace: WorkspaceRecord | None = None
+    tool_operations: list[ToolOperation] = field(default_factory=list)
+    test_executions: list[TestExecution] = field(default_factory=list)
+    feedback: list[ExecutionFeedback] = field(default_factory=list)
     errors: list[str] = field(default_factory=list)
     history: list[str] = field(default_factory=list)

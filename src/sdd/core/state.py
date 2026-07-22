@@ -19,4 +19,6 @@ RunStatus: TypeAlias = Literal[
     "awaiting_human",
     "completed",
     "failed",
+    "blocked",
+    "rejected",
 ]

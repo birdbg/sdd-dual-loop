@@ -9,6 +9,6 @@ def test_run_context_uses_shared_artifact_types() -> None:
     )
 
     assert context.current_node == "purpose"
-    assert context.max_iterations == 1
+    assert context.max_iterations == 2
     assert context.purpose.statement == "Expose user lookup"
     assert context.code_changes[0].path == "app.py"
